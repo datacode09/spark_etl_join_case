@@ -84,32 +84,46 @@ class FlexibleExtractor(BaseExtractor):
             raise ValueError("Source must be a path (str) or a DataFrame.")
         return df
 
-class AtomExtractor(BaseExtractor):
+
+class AtomExtractor(FlexibleExtractor):
     expected_schema = StructType([
         StructField("id", IntegerType(), nullable=False),
         StructField("name", StringType(), nullable=True),
-        # Add more fields as per your actual schema
     ])
-
-    def extract_data(self, source) -> DataFrame:
-        df = super().extract_data(source)
-        self.validate_schema(df, self.expected_schema)
-        df_transformed = self.add_join_key(df, self.atom_join_key_logic)
-        return df_transformed
 
     def atom_join_key_logic(self, df):
         # Custom logic for AtomExtractor to create JoinKey
         return df.withColumn("JoinKey", concat(col("id"), lit('_'), col("name")))
 
-class IncomingVolExtractor(BaseExtractor):
+class IncomingVolExtractor(FlexibleExtractor):
     expected_schema = StructType([
         StructField("volume", IntegerType(), nullable=False),
         StructField("date", StringType(), nullable=False),
-        # Define your actual schema
     ])
 
-    def extract_data(self, source) -> DataFrame:
-        df = super().extract_data(source)
-        self.validate_schema(df, self.expected_schema)
-        df_transformed = self.add_join_key(df, self.incoming_vol_join_key_logic)
-        return df_transformed
+    def incoming_vol_join_key_logic(self, df):
+        # Custom logic for IncomingVolExtractor to create JoinKey
+        return df.withColumn("JoinKey", concat(col("volume"), lit('#'), col("date")))
+
+class ActivityListExtractor:
+    def __init__(self, spark: SparkSession):
+        self.spark = spark
+
+    def extract_data(self, nas_path: str) -> DataFrame:
+        try:
+            df_nas = self.spark.read.csv(nas_path, header=True, inferSchema=True)
+            return df_nas
+        except Exception as e:
+            logging.error(f"Failed to extract data from NAS at {nas_path}: {e}")
+            rais
+class EmpHierarchyExtractor:
+    def __init__(self, spark: SparkSession):
+        self.spark = spark
+
+    def extract_data(self, hive_table: str) -> DataFrame:
+        try:
+            df_hive = self.spark.sql(f"SELECT * FROM {hive_table}")
+            return df_hive
+        except Exception as e:
+            logging.error(f"Failed to extract data from Hive table {hive_table}: {e}")
+            raise
