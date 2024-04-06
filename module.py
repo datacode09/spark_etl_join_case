@@ -1,4 +1,4 @@
-import logging
+`import logging
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import *
 
@@ -15,6 +15,20 @@ class AtomExtractor:
         except Exception as e:
             logging.error(f"Failed to extract data from HDFS at {hdfs_path}: {e}")
             raise
+#write code from below line to create a similar class like AtomExtractor with exact same methods and attributes
+
+class IncomingVolumeExtractor:
+    def __init__(self, spark: SparkSession):
+        self.spark = spark
+
+    def extract_data(self, hdfs_path: str) -> DataFrame:
+        try:
+            df_hdfs = self.spark.read.parquet(hdfs_path)
+            return df_hdfs
+        except Exception as e:
+            logging.error(f"Failed to extract data from HDFS at {hdfs_path}: {e}")
+            raise   
+
 
 class ActivityListExtractor:
     def __init__(self, spark: SparkSession):
@@ -26,6 +40,17 @@ class ActivityListExtractor:
             return df_nas
         except Exception as e:
             logging.error(f"Failed to extract data from NAS at {nas_path}: {e}")
+            rais
+class EmpHierarchyExtractor:
+    def __init__(self, spark: SparkSession):
+        self.spark = spark
+
+    def extract_data(self, hive_table: str) -> DataFrame:
+        try:
+            df_hive = self.spark.sql(f"SELECT * FROM {hive_table}")
+            return df_hive
+        except Exception as e:
+            logging.error(f"Failed to extract data from Hive table {hive_table}: {e}")
             raise
 
 class Extraction:
