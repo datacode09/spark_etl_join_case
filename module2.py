@@ -42,6 +42,27 @@ class BaseExtractor:
         
         Then call it as:
         df_transformed = self.add_join_key(df, self.custom_join_key_formula)
+
+        ======================================================
+        class CustomExtractor(BaseExtractor):
+            def __init__(self):
+                super().__init__()
+        
+            def extract_data(self, source: str) -> DataFrame:
+                # Data extraction logic (e.g., read from a source)
+                df = self.spark.read.csv(source, header=True)
+                return df
+        
+            def transform_data(self, df: DataFrame) -> DataFrame:
+                # Define a custom transformation formula as a method
+                def custom_join_key_formula(df):
+                    # Assume 'id' and 'name' are columns in the DataFrame
+                    return df.withColumn("JoinKey", concat(col("id"), lit('_'), col("name")))
+                
+                # Apply the custom formula to add 'JoinKey'
+                df_transformed = self.add_join_key(df, custom_join_key_formula)
+                return df_transformed
+
         """
         return formula(df)
 
