@@ -95,16 +95,55 @@ class AtomExtractor(FlexibleExtractor):
         # Custom logic for AtomExtractor to create JoinKey
         return df.withColumn("JoinKey", concat(col("id"), lit('_'), col("name")))
 
-class IncomingVolExtractor(FlexibleExtractor):
+class IncomingVolExtractor:
     expected_schema = StructType([
-        StructField("volume", IntegerType(), nullable=False),
-        StructField("date", StringType(), nullable=False),
+        StructField("data_source", StringType(), nullable=True),
+        StructField("process", StringType(), nullable=True),
+        StructField("subprocess_1", StringType(), nullable=True),
+        StructField("subprocess_2", StringType(), nullable=True),
+        StructField("subprocess_3", StringType(), nullable=True),
+        StructField("subprocess_4", StringType(), nullable=True),
+        StructField("subprocess_5", StringType(), nullable=True),
+        StructField("subprocess_6", StringType(), nullable=True),
+        # Add other fields as per your actual schema
     ])
 
-    def incoming_vol_join_key_logic(self, df):
-        # Custom logic for IncomingVolExtractor to create JoinKey
-        return df.withColumn("JoinKey", concat(col("volume"), lit('#'), col("date")))
+    def __init__(self):
+        self.spark = SparkSessionManager.get_spark_session()
 
+    def extract_data(self, source) -> DataFrame:
+        # Assuming source is a valid DataFrame or path
+        df = self.spark.read.csv(source, header=True, inferSchema=True)
+        return df
+
+    def incoming_vol_join_key_logic(self, df):
+        # Define columns to transform
+        columns_to_transform = [
+            "data_source", "process", "subprocess_1", "subprocess_2",
+            "subprocess_3", "subprocess_4", "subprocess_5", "subprocess_6"
+        ]
+        
+        # Define a function to apply the transformations
+        def transform_column(col_name):
+            return trim(upper(regexp_replace(col(col_name), "\\W", "")))
+
+        # Apply transformations to specified columns
+        transformed_columns = [transform_column(col_name).alias(col_name) for col_name in columns_to_transform]
+        
+        # Concatenate the transformed columns with the specified separators
+        concatenated_col = concat_ws("|", 
+                                     *transformed_columns[0:2], 
+                                     lit("1"), 
+                                     *transformed_columns[2:6], 
+                                     lit(""), 
+                                     transformed_columns[6], 
+                                     lit("|"), 
+                                     transformed_columns[7])
+        
+        # Add the concatenated column to the DataFrame
+        df_with_join_key = df.withColumn("JoinKey", concatenated_col)
+        
+        return df_with_join_key
 class ActivityListExtractor:
     def __init__(self, spark: SparkSession):
         self.spark = spark
