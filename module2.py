@@ -171,42 +171,47 @@ class DataJoinAndSave:
     def __init__(self, spark_session):
         self.spark = spark_session
 
-    def extract_and_join(self, extractor1, extractor2, source1, source2, join_columns, output_path):
+    def extract_join_and_optionally_save(self, extractor1, source1, extractor2, source2, join_columns, save_as_parquet=False, output_path=None):
         """
-        Extract data using two extractors, join the dataframes, and save the result to HDFS.
-        
-        :param extractor1: First extractor instance (e.g., IncomingVolExtractor() or AtomExtractor())
-        :param extractor2: Second extractor instance (always ActivityListExtractor())
-        :param source1: Source for the first extractor
-        :param source2: Source for the second extractor (NAS path for ActivityListExtractor)
-        :param join_columns: Columns on which to join the dataframes
-        :param output_path: HDFS path where the joined dataframe is to be saved as Parquet
+        Extracts data, joins dataframes, and optionally saves the result to HDFS.
+
+        :param extractor1: The first extractor instance (e.g., IncomingVolExtractor or AtomExtractor).
+        :param source1: Source for the first extractor.
+        :param extractor2: The second extractor instance (e.g., ActivityListExtractor or EmpHierarchyExtractor).
+        :param source2: Source for the second extractor.
+        :param join_columns: Columns on which to join the dataframes.
+        :param save_as_parquet: Boolean indicating whether to save the output as a Parquet file.
+        :param output_path: HDFS path where the output is saved if save_as_parquet is True.
         """
         df1 = extractor1.extract_data(source1)
         df2 = extractor2.extract_data(source2)
         
-        # Assuming the join is to be done on similar column names between df1 and df2
         joined_df = df1.join(df2, join_columns)
-        
-        # Write the joined dataframe to the specified HDFS path as Parquet
-        joined_df.write.mode("overwrite").parquet(output_path)
 
-    def join_with_emp_hierarchy(self, combined_path, emp_hierarchy_source, join_columns, final_output_path):
+        if save_as_parquet:
+            if not output_path:
+                raise ValueError("Output path must be provided to save as Parquet.")
+            joined_df.write.mode("overwrite").parquet(output_path)
+            return None
+        else:
+            return joined_df
+
+    def join_dataframes(self, df1, df2, join_columns, save_as_parquet=False, output_path=None):
         """
-        Load a dataframe from a given HDFS path, join it with data extracted by EmpHierarchyExtractor, 
-        and save the result to a new HDFS path.
-        
-        :param combined_path: HDFS path from where to load the combined dataframe
-        :param emp_hierarchy_source: Source for EmpHierarchyExtractor (e.g., Hive table name)
-        :param join_columns: Columns on which to join the dataframes
-        :param final_output_path: HDFS path where the final joined dataframe is to be saved as Parquet
+        Joins two DataFrames and optionally saves the result.
+
+        :param df1: The first DataFrame.
+        :param df2: The second DataFrame.
+        :param join_columns: Columns on which to join the dataframes.
+        :param save_as_parquet: Boolean indicating whether to save the output as a Parquet file.
+        :param output_path: HDFS path where the output is saved if save_as_parquet is True.
         """
-        combined_df = self.spark.read.parquet(combined_path)
-        emp_hierarchy_extractor = EmpHierarchyExtractor()
-        emp_hierarchy_df = emp_hierarchy_extractor.extract_data(emp_hierarchy_source)
-        
-        # Join the combined dataframe with the emp_hierarchy_df
-        final_df = combined_df.join(emp_hierarchy_df, join_columns)
-        
-        # Write the final dataframe to the specified HDFS path as Parquet
-        final_df.write.mode("overwrite").parquet(final_output_path)
+        final_df = df1.join(df2, join_columns)
+
+        if save_as_parquet:
+            if not output_path:
+                raise ValueError("Output path must be provided to save as Parquet.")
+            final_df.write.mode("overwrite").parquet(output_path)
+        else:
+            return final_df
+
