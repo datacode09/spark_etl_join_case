@@ -171,47 +171,42 @@ class DataJoinAndSave:
     def __init__(self, spark_session):
         self.spark = spark_session
 
-    def extract_join_and_optionally_save(self, extractor1, source1, extractor2, source2, join_columns, save_as_parquet=False, output_path=None):
+    def execute_enhancement_workflow(self, primary_extractor, activity_list_extractor, emp_hierarchy_extractor, primary_source, activity_list_source, emp_hierarchy_source, join_columns, save_as_parquet=False, intermediate_output_paths=None, final_output_path=None):
         """
-        Extracts data, joins dataframes, and optionally saves the result to HDFS.
+        Executes the enhancement workflow for either IncomingVol or Atom enhancement.
 
-        :param extractor1: The first extractor instance (e.g., IncomingVolExtractor or AtomExtractor).
-        :param source1: Source for the first extractor.
-        :param extractor2: The second extractor instance (e.g., ActivityListExtractor or EmpHierarchyExtractor).
-        :param source2: Source for the second extractor.
-        :param join_columns: Columns on which to join the dataframes.
-        :param save_as_parquet: Boolean indicating whether to save the output as a Parquet file.
-        :param output_path: HDFS path where the output is saved if save_as_parquet is True.
+        :param primary_extractor: Instance of IncomingVolExtractor or AtomExtractor.
+        :param activity_list_extractor: Instance of ActivityListExtractor.
+        :param emp_hierarchy_extractor: Instance of EmpHierarchyExtractor.
+        :param primary_source: Source path or DataFrame for the primary extractor.
+        :param activity_list_source: Source path for ActivityListExtractor.
+        :param emp_hierarchy_source: Source for EmpHierarchyExtractor (e.g., Hive table name).
+        :param join_columns: A dictionary specifying join columns for each step.
+        :param save_as_parquet: Boolean indicating whether to save outputs as Parquet files.
+        :param intermediate_output_paths: Dictionary with paths for saving intermediate outputs.
+        :param final_output_path: Path to save the final output if save_as_parquet is True.
         """
-        df1 = extractor1.extract_data(source1)
-        df2 = extractor2.extract_data(source2)
-        
-        joined_df = df1.join(df2, join_columns)
+        # Step 1: Extract data using the primary extractor
+        primary_df = primary_extractor.extract_data(primary_source)
 
+        # Step 2: Join with ActivityListExtractor output
+        activity_df = activity_list_extractor.extract_data(activity_list_source)
+        step_2_output = primary_df.join(activity_df, join_columns['primary_activity'])
+
+        # Step 3: Join with EmpHierarchyExtractor output
+        emp_hierarchy_df = emp_hierarchy_extractor.extract_data(emp_hierarchy_source)
+        step_3_output = primary_df.join(emp_hierarchy_df, join_columns['primary_emp_hierarchy'])
+
+        # Step 4: Join step 2 and step 3 outputs
+        final_output = step_2_output.join(step_3_output, join_columns['step_2_3'], 'outer')
+
+        # Optionally save outputs
         if save_as_parquet:
-            if not output_path:
-                raise ValueError("Output path must be provided to save as Parquet.")
-            joined_df.write.mode("overwrite").parquet(output_path)
-            return None
+            if intermediate_output_paths:
+                step_2_output.write.mode("overwrite").parquet(intermediate_output_paths['step_2'])
+                step_3_output.write.mode("overwrite").parquet(intermediate_output_paths['step_3'])
+            if final_output_path:
+                final_output.write.mode("overwrite").parquet(final_output_path)
         else:
-            return joined_df
-
-    def join_dataframes(self, df1, df2, join_columns, save_as_parquet=False, output_path=None):
-        """
-        Joins two DataFrames and optionally saves the result.
-
-        :param df1: The first DataFrame.
-        :param df2: The second DataFrame.
-        :param join_columns: Columns on which to join the dataframes.
-        :param save_as_parquet: Boolean indicating whether to save the output as a Parquet file.
-        :param output_path: HDFS path where the output is saved if save_as_parquet is True.
-        """
-        final_df = df1.join(df2, join_columns)
-
-        if save_as_parquet:
-            if not output_path:
-                raise ValueError("Output path must be provided to save as Parquet.")
-            final_df.write.mode("overwrite").parquet(output_path)
-        else:
-            return final_df
+            return final_output
 
