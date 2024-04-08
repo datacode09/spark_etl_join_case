@@ -1,7 +1,7 @@
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import regexp_replace, trim, upper, concat_ws, col, when
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, TimestampType
-
+from pyspark.sql.functions import coalesce, lit
 import os
 import logging
 
@@ -162,59 +162,64 @@ class ActivityListExtractor:
             return df_nas
         except Exception as e:
             logging.error(f"Failed to extract data from NAS at {nas_path}: {e}")
-            rais
+            raise
 class EmpHierarchyExtractor:
     def __init__(self, spark: SparkSession):
         self.spark = spark
 
-    def extract_data(self, hive_table: str) -> DataFrame:
+    def extract_data(self) -> DataFrame:
+        """
+        Extracts the latest snapshot of employee hierarchy data from a predefined Hive table.
+        
+        :return: A DataFrame containing the query results.
+        """
         try:
-            df_hive = self.spark.sql(f"SELECT * FROM {hive_table}")
+            # Embedded Hive table name
+            hive_table = "prod_rie0_atom.enterprisehierarchy"
+            sql_query = f"""
+            SELECT employeeid, employeename, MAX(snap_date) AS latest_snap_date
+            FROM {hive_table}
+            GROUP BY employeeid, employeename
+            """
+            df_hive = self.spark.sql(sql_query)
             return df_hive
         except Exception as e:
             logging.error(f"Failed to extract data from Hive table {hive_table}: {e}")
             raise
 
 class DataJoinAndSave:
-    def __init__(self, spark_session):
+    def __init__(self, spark_session: SparkSession):
         self.spark = spark_session
 
     def execute_enhancement_workflow(self, primary_extractor, activity_list_extractor, emp_hierarchy_extractor, primary_source, activity_list_source, emp_hierarchy_source, join_columns, save_as_parquet=False, intermediate_output_paths=None, final_output_path=None):
         """
-        Executes the enhancement workflow for either IncomingVol or Atom enhancement.
-
-        :param primary_extractor: Instance of IncomingVolExtractor or AtomExtractor.
-        :param activity_list_extractor: Instance of ActivityListExtractor.
-        :param emp_hierarchy_extractor: Instance of EmpHierarchyExtractor.
-        :param primary_source: Source path or DataFrame for the primary extractor.
-        :param activity_list_source: Source path for ActivityListExtractor.
-        :param emp_hierarchy_source: Source for EmpHierarchyExtractor (e.g., Hive table name).
-        :param join_columns: A dictionary specifying join columns for each step.
-        :param save_as_parquet: Boolean indicating whether to save outputs as Parquet files.
-        :param intermediate_output_paths: Dictionary with paths for saving intermediate outputs.
-        :param final_output_path: Path to save the final output if save_as_parquet is True.
+        Executes the enhancement workflow with conditional logic for Center and Capacity_Planning_Group columns.
         """
-        # Step 1: Extract data using the primary extractor
+        # Extract data using the primary extractor
         primary_df = primary_extractor.extract_data(primary_source)
 
-        # Step 2: Join with ActivityListExtractor output
+        # Join with ActivityListExtractor output, adding Center and Capacity_Planning_Group columns
         activity_df = activity_list_extractor.extract_data(activity_list_source)
-        step_2_output = primary_df.join(activity_df, join_columns['primary_activity'])
+        step_2_output = primary_df.join(activity_df, join_columns['primary_activity'], "left") \
+            .select(
+                primary_df["*"], 
+                coalesce(activity_df["New_Center"], lit("Not Defined")).alias("Center"),
+                coalesce(activity_df["Capacity_Planning_Group"], lit("Not Defined")).alias("Capacity_Planning_Group")
+            )
 
-        # Step 3: Join with EmpHierarchyExtractor output
+        # Join with EmpHierarchyExtractor output
         emp_hierarchy_df = emp_hierarchy_extractor.extract_data(emp_hierarchy_source)
         step_3_output = primary_df.join(emp_hierarchy_df, join_columns['primary_emp_hierarchy'])
 
-        # Step 4: Join step 2 and step 3 outputs
+        # Join step 2 and step 3 outputs, this time without adding new columns
         final_output = step_2_output.join(step_3_output, join_columns['step_2_3'], 'outer')
 
         # Optionally save outputs
         if save_as_parquet:
             if intermediate_output_paths:
-                step_2_output.write.mode("overwrite").parquet(intermediate_output_paths['step_2'])
-                step_3_output.write.mode("overwrite").parquet(intermediate_output_paths['step_3'])
+                step_2_output.write.mode("overwrite").parquet(intermediate_output_paths.get('step_2', 'step_2_output.parquet'))
+                step_3_output.write.mode("overwrite").parquet(intermediate_output_paths.get('step_3', 'step_3_output.parquet'))
             if final_output_path:
                 final_output.write.mode("overwrite").parquet(final_output_path)
         else:
             return final_output
-

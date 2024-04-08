@@ -1,23 +1,32 @@
 from pyspark.sql import SparkSession
-from etl_framework import IncomingVolExtractor, AtomExtractor, ActivityListExtractor, EmpHierarchyExtractor, DataJoinAndSave
+# Assuming the extractors and DataJoinAndSave classes are defined in etl_framework.py
+from etl_framework import IncomingVolExtractor, ActivityListExtractor, EmpHierarchyExtractor, DataJoinAndSave
 
-if __name__ == "__main__":
-    spark = SparkSession.builder.appName("ETLEnhancementWorkflow").getOrCreate()
-    
-    # Initialize extractors
-    primary_extractor = IncomingVolExtractor()  # or AtomExtractor()
-    activity_list_extractor = ActivityListExtractor()
-    emp_hierarchy_extractor = EmpHierarchyExtractor()
+def main():
+    # Initialize Spark session
+    spark = SparkSession.builder.appName("EnhancedETLWorkflow").getOrCreate()
 
-    # Initialize DataJoinAndSave
+    # Initialize extractor instances with Spark session
+    primary_extractor = IncomingVolExtractor(spark)
+    activity_list_extractor = ActivityListExtractor(spark)
+    emp_hierarchy_extractor = EmpHierarchyExtractor(spark)
+
+    # Initialize DataJoinAndSave instance with Spark session
     data_join_save = DataJoinAndSave(spark)
 
-    # Define sources
-    primary_source = "path/to/incoming_vol/source"  # or "path/to/atom/source"
-    activity_list_source = "path/to/activity_list/source"
-    emp_hierarchy_source = "hive_table_for_emp_hierarchy"
+    # Define sources for extractors (replace with actual paths or sources)
+    primary_source = "path/to/incoming/volume/data"
+    activity_list_source = "path/to/activity/list/data"
+    emp_hierarchy_source = "path/to/emp/hierarchy/data"
 
-    # Execute the workflow
+    # Define join columns for each join operation
+    join_columns = {
+        'primary_activity': 'JoinKey',
+        'primary_emp_hierarchy': 'JoinKey',
+        'step_2_3': 'JoinKey'
+    }
+
+    # Execute the ETL enhancement workflow
     data_join_save.execute_enhancement_workflow(
         primary_extractor=primary_extractor,
         activity_list_extractor=activity_list_extractor,
@@ -25,17 +34,17 @@ if __name__ == "__main__":
         primary_source=primary_source,
         activity_list_source=activity_list_source,
         emp_hierarchy_source=emp_hierarchy_source,
-        join_columns={
-            'primary_activity': ['join_col1', 'join_col2'],
-            'primary_emp_hierarchy': ['join_col1', 'join_col2'],
-            'step_2_3': ['join_col1', 'join_col2']
-        },
-        save_as_parquet=True,
+        join_columns=join_columns,
+        save_as_parquet=True,  # Change to False if you wish to work with the DataFrame directly
         intermediate_output_paths={
-            'step_2': "path/to/save/step_2_output.parquet",
-            'step_3': "path/to/save/step_3_output.parquet"
+            'step_2': "path/to/intermediate/step_2_output.parquet",
+            'step_3': "path/to/intermediate/step_3_output.parquet"
         },
-        final_output_path="path/to/save/final_output.parquet"
+        final_output_path="path/to/final_output.parquet"
     )
-    
+
+    # Cleanup
     spark.stop()
+
+if __name__ == "__main__":
+    main()
