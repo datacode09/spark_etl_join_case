@@ -166,3 +166,47 @@ class EmpHierarchyExtractor:
         except Exception as e:
             logging.error(f"Failed to extract data from Hive table {hive_table}: {e}")
             raise
+
+class DataJoinAndSave:
+    def __init__(self, spark_session):
+        self.spark = spark_session
+
+    def extract_and_join(self, extractor1, extractor2, source1, source2, join_columns, output_path):
+        """
+        Extract data using two extractors, join the dataframes, and save the result to HDFS.
+        
+        :param extractor1: First extractor instance (e.g., IncomingVolExtractor() or AtomExtractor())
+        :param extractor2: Second extractor instance (always ActivityListExtractor())
+        :param source1: Source for the first extractor
+        :param source2: Source for the second extractor (NAS path for ActivityListExtractor)
+        :param join_columns: Columns on which to join the dataframes
+        :param output_path: HDFS path where the joined dataframe is to be saved as Parquet
+        """
+        df1 = extractor1.extract_data(source1)
+        df2 = extractor2.extract_data(source2)
+        
+        # Assuming the join is to be done on similar column names between df1 and df2
+        joined_df = df1.join(df2, join_columns)
+        
+        # Write the joined dataframe to the specified HDFS path as Parquet
+        joined_df.write.mode("overwrite").parquet(output_path)
+
+    def join_with_emp_hierarchy(self, combined_path, emp_hierarchy_source, join_columns, final_output_path):
+        """
+        Load a dataframe from a given HDFS path, join it with data extracted by EmpHierarchyExtractor, 
+        and save the result to a new HDFS path.
+        
+        :param combined_path: HDFS path from where to load the combined dataframe
+        :param emp_hierarchy_source: Source for EmpHierarchyExtractor (e.g., Hive table name)
+        :param join_columns: Columns on which to join the dataframes
+        :param final_output_path: HDFS path where the final joined dataframe is to be saved as Parquet
+        """
+        combined_df = self.spark.read.parquet(combined_path)
+        emp_hierarchy_extractor = EmpHierarchyExtractor()
+        emp_hierarchy_df = emp_hierarchy_extractor.extract_data(emp_hierarchy_source)
+        
+        # Join the combined dataframe with the emp_hierarchy_df
+        final_df = combined_df.join(emp_hierarchy_df, join_columns)
+        
+        # Write the final dataframe to the specified HDFS path as Parquet
+        final_df.write.mode("overwrite").parquet(final_output_path)
