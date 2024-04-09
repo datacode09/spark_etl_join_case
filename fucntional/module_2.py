@@ -9,8 +9,69 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def get_spark_session(app_name="ETLFramework"):
     return SparkSession.builder.appName(app_name).getOrCreate()
 
-def extract_incoming_vol_data(spark, source, expected_schema: StructType) -> DataFrame:
-    return spark.read.schema(expected_schema).csv(source, header=True, inferSchema=True)
+from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql.functions import regexp_replace, trim, upper, concat_ws, col, when, lit
+from pyspark.sql.types import StructType
+import os
+
+def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: StructType = None) -> DataFrame:
+    """
+    Extracts data from a given source, which can be a path to a .parquet file, a directory containing .parquet files,
+    or a DataFrame object. Then, applies the incoming_vol_join_key_logic to add a JoinKey.
+
+    Parameters:
+    - spark: The SparkSession object.
+    - source: The data source, which can be a path (str) or a DataFrame.
+    - expected_schema: The expected schema of the DataFrame, applicable if the source is a path.
+
+    Returns:
+    - A DataFrame with the added 'JoinKey' column.
+    """
+    # Handle different types of input sources
+    if isinstance(source, str):
+        if source.endswith('.parquet'):
+            df = spark.read.parquet(source)
+        elif os.path.isdir(source):
+            df = spark.read.parquet(f"{source}/*.parquet")
+        else:
+            # Assuming CSV as a default if not specified as parquet but adjust as needed
+            df = spark.read.schema(expected_schema).csv(source, header=True, inferSchema=True) if expected_schema else spark.read.csv(source, header=True, inferSchema=True)
+    elif isinstance(source, DataFrame):
+        df = source
+    else:
+        raise ValueError("Source must be a path (str) or a DataFrame.")
+    
+    # Apply join key logic if DataFrame has been successfully loaded
+    if df is not None:
+        df = incoming_vol_join_key_logic(df)
+
+    return df
+
+def incoming_vol_join_key_logic(df: DataFrame) -> DataFrame:
+    # Logic remains the same as previously defined
+    columns_to_transform = [
+        "data_source", "process", "subprocess_1", "subprocess_2",
+        "subprocess_3", "subprocess_5", "subprocess_6"
+    ]
+    def transform_column(col_name):
+        return trim(upper(regexp_replace(col(col_name), "\\W", "")))
+    df = df.withColumn(
+        "JoinKey",
+        when(col("data_source") == "CART",
+             concat_ws("|",
+                       *[transform_column(c) for c in columns_to_transform],
+                       lit(""),  # Placeholder for subprocess_4
+                       transform_column("subprocess_6"), lit("|"))
+        ).otherwise(
+            concat_ws("|",
+                      *[transform_column(c) for c in columns_to_transform[:4]],
+                      transform_column("subprocess_4"),
+                      *[transform_column(c) for c in columns_to_transform[4:]],
+                      lit("|"))
+        )
+    )
+    return df
+
 
 def extract_activity_list_data(spark, nas_path: str) -> DataFrame:
     try:
