@@ -203,8 +203,6 @@ def merge_enriched_data(enriched_activity_data: DataFrame, enriched_emp_hierarch
     
     merged_data = enriched_activity_data.join(enriched_emp_hierarchy_data, common_keys, 'outer')
     return merged_data
-
-
 def enhancement_workflow(spark, config):
     """
     Executes an ETL process based on the provided configuration, with a focus on flexibility and clarity.
@@ -219,15 +217,12 @@ def enhancement_workflow(spark, config):
 
         enriched_emp_hierarchy_data = None
         if config.get('include_employee_hierarchy_enrichment', False):
-            emp_hierarchy_df = extract_emp_hierarchy_data(spark, config['employee_hierarchy_data_source'])
+            # Directly extracts employee hierarchy data from a predefined Hive table
+            emp_hierarchy_df = extract_emp_hierarchy_data(spark)
             enriched_emp_hierarchy_data = enrich_primary_with_emp_hierarchy(
                 primary_df, emp_hierarchy_df, config['employee_info_json_column'])
 
-        # Merging step 2 and step 3 outputs if both are performed
-        if enriched_activity_data is not None and enriched_emp_hierarchy_data is not None:
-            final_output = merge_enriched_data(enriched_activity_data, enriched_emp_hierarchy_data)
-        else:
-            final_output = enriched_emp_hierarchy_data or enriched_activity_data
+        final_output = enriched_emp_hierarchy_data if config.get('include_employee_hierarchy_enrichment', False) else enriched_activity_data
 
         if output_path := config.get('output_path'):
             final_output.write.mode("overwrite").parquet(output_path)
@@ -238,6 +233,8 @@ def enhancement_workflow(spark, config):
     except Exception as e:
         print(f"Failed to complete the enhancement_workflow due to: {e}")
         raise
+
+
 
 
 
