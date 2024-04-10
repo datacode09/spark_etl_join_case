@@ -88,6 +88,28 @@ def extract_emp_hierarchy_data(spark) -> DataFrame:
     except Exception as e:
         logging.error(f"Failed to extract data from Hive table {hive_table}: {e}")
         raise
+        
+def generate_step_2_output(primary_df_with_join_key: DataFrame, activity_list_df: DataFrame) -> DataFrame:
+    try:
+        step_2_output = primary_df_with_join_key.join(activity_list_df, primary_df_with_join_key["primary_activity"] == activity_list_df["activity_id"], "left") \
+            .select(
+                primary_df_with_join_key["*"],
+                coalesce(activity_list_df["New_Center"], lit("Not Defined")).alias("Center"),
+                coalesce(activity_list_df["Capacity_Planning_Group"], lit("Not Defined")).alias("Capacity_Planning_Group")
+            )
+        return step_2_output
+    except Exception as e:
+        logging.error(f"Error generating step_2_output: {e}")
+        raise
+
+def generate_step_3_output(step_2_output: DataFrame, emp_hierarchy_df: DataFrame) -> DataFrame:
+    try:
+        step_3_output = step_2_output.join(emp_hierarchy_df, step_2_output["employee_number"] == emp_hierarchy_df["employeeid"], "left")
+        return step_3_output
+    except Exception as e:
+        logging.error(f"Error generating step_3_output: {e}")
+        raise
+
 
 def identify_join_columns(df1: DataFrame, df2: DataFrame) -> list:
     df1_columns = set(df1.columns)
@@ -100,13 +122,29 @@ def join_step_2_and_3_data(step_2_output: DataFrame, step_3_output: DataFrame) -
         raise ValueError("No suitable join columns were identified between the two DataFrames.")
     return step_2_output.join(step_3_output, join_columns, 'outer')
 
-def join_and_save_data(spark, primary_df, activity_list_df, emp_hierarchy_df, join_columns, intermediate_output_paths=None, final_output_path=None):
-    step_2_output = primary_df.join(activity_list_df, join_columns['primary_activity'], "left").select(primary_df["*"], coalesce(activity_list_df["New_Center"], lit("Not Defined")).alias("Center"), coalesce(activity_list_df["Capacity_Planning_Group"], lit("Not Defined")).alias("Capacity_Planning_Group"))
-    step_3_output = primary_df.join(emp_hierarchy_df, join_columns['primary_emp_hierarchy'])
+def join_and_save_workflow(spark, primary_source, activity_list_source, emp_hierarchy_source, json_column_name, key_name, final_output_path=None):
+    try:
+        # Initial data extraction
+        primary_df = extract_incoming_vol_data(spark, primary_source)
+        activity_list_df = extract_activity_list_data(spark, activity_list_source)
+        emp_hierarchy_df = extract_emp_hierarchy_data(spark)
 
-    final_output = join_step_2_and_3_data(step_2_output, step_3_output)
+        # Extract join key from primary_df
+        primary_df_with_join_key = extract_employee_number_as_join_key(primary_df, json_column_name, key_name)
 
-    if final_output_path:
-        final_output.write.mode("overwrite").parquet(final_output_path)
-    else:
-        return final_output
+        # Generate step_2_output
+        step_2_output = generate_step_2_output(primary_df_with_join_key, activity_list_df)
+
+        # Generate step_3_output
+        step_3_output = generate_step_3_output(step_2_output, emp_hierarchy_df)
+
+        # Assuming step_3_output is the final output to be saved
+        if final_output_path:
+            step_3_output.write.mode("overwrite").parquet(final_output_path)
+        else:
+            return step_3_output
+    except Exception as e:
+        logging.error(f"Failed to complete the join_and_save_workflow: {e}")
+        # Add any cleanup or retry logic as needed
+        raise
+
