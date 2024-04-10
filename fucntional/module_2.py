@@ -2,17 +2,13 @@ from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import coalesce, lit, concat, concat_ws, col, trim, upper, regexp_replace, when
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, TimestampType
 import logging
+import os
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def get_spark_session(app_name="ETLFramework"):
     return SparkSession.builder.appName(app_name).getOrCreate()
-
-from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.functions import regexp_replace, trim, upper, concat_ws, col, when, lit
-from pyspark.sql.types import StructType
-import os
 
 def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: StructType = None) -> DataFrame:
     """
@@ -47,14 +43,36 @@ def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: Stru
 
     return df
 
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import trim, upper, regexp_replace, col, when, concat_ws, lit
+
+def transform_column(col_name):
+    """
+    Transforms a column name by trimming, converting to uppercase, and replacing non-word characters.
+
+    Parameters:
+    - col_name: The name of the column to transform.
+
+    Returns:
+    - The transformed column.
+    """
+    return trim(upper(regexp_replace(col(col_name), "\\W", "")))
 def incoming_vol_join_key_logic(df: DataFrame) -> DataFrame:
-    # Logic remains the same as previously defined
+    """
+    Applies join key logic specific to the incoming volume data.
+
+    Parameters:
+    - df: The DataFrame to process.
+
+    Returns:
+    - DataFrame with an added 'JoinKey' column.
+    """
     columns_to_transform = [
         "data_source", "process", "subprocess_1", "subprocess_2",
         "subprocess_3", "subprocess_5", "subprocess_6"
     ]
-    def transform_column(col_name):
-        return trim(upper(regexp_replace(col(col_name), "\\W", "")))
+
+    # Use the standalone transform_column function within the DataFrame transformation
     df = df.withColumn(
         "JoinKey",
         when(col("data_source") == "CART",
@@ -71,6 +89,8 @@ def incoming_vol_join_key_logic(df: DataFrame) -> DataFrame:
         )
     )
     return df
+
+
 
 
 def extract_activity_list_data(spark, nas_path: str) -> DataFrame:
