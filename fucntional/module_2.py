@@ -43,8 +43,6 @@ def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: Stru
 
     return df
 
-from pyspark.sql import DataFrame
-from pyspark.sql.functions import trim, upper, regexp_replace, col, when, concat_ws, lit
 
 def transform_column(col_name):
     """
