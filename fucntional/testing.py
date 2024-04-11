@@ -1,3 +1,21 @@
+"""
+test_get_spark_session: Tests if the get_spark_session function returns a SparkSession object.
+test_extract_incoming_vol_data_parquet: Tests error handling when extracting data from a Parquet file without an expected schema.
+test_extract_incoming_vol_data_csv_no_schema: Tests error handling when extracting data from a CSV file without an expected schema.
+test_extract_incoming_vol_data_csv_with_schema: Tests if the schema of the extracted data matches the expected schema from a CSV file.
+test_incoming_vol_join_key_logic: Tests the logic for generating join keys in the incoming_vol_join_key_logic function.
+test_extract_activity_list_data: Tests if the schema of the extracted activity list data matches the expected schema.
+test_extract_emp_hierarchy_data: Tests if the schema of the extracted employee hierarchy data matches the expected schema.
+test_enrich_primary_with_activity_data: Tests if the schema of the enriched primary DataFrame with activity data matches the expected schema.
+test_extract_employee_number_from_json: Tests if the schema of the DataFrame with extracted employee numbers from JSON matches the expected schema.
+test_enrich_primary_with_emp_hierarchy: Tests if the schema of the enriched primary DataFrame with employee hierarchy matches the expected schema.
+test_find_common_join_keys: Tests if the common join keys between two DataFrames are correctly identified.
+test_merge_enriched_data_no_common_keys: Tests merging enriched data when no common keys are found.
+test_merge_enriched_data_with_common_keys: Tests merging enriched data when common keys are found.
+test_enhancement_workflow: Tests the entire enhancement workflow with a specified configuration.
+These test cases cover various aspects of the module's functionality, including data extraction, transformation, enrichment, and error handling.
+"""
+
 import unittest
 from pyspark.sql import SparkSession, DataFrame
 from pyspark.sql.functions import lit
