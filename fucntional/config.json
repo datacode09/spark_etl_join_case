@@ -32,17 +32,19 @@
       ],
     "activity_data_schema": [
       {"name": "DataSource", "type": "StringType", "nullable": true},
+      {"name": "Process", "type": "StringType", "nullable": true},
       {"name": "SubProcess1", "type": "StringType", "nullable": true},
       {"name": "SubProcess2", "type": "StringType", "nullable": true},
       {"name": "SubProcess3", "type": "StringType", "nullable": true},
       {"name": "SubProcess4", "type": "StringType", "nullable": true},
       {"name": "SubProcess5", "type": "StringType", "nullable": true},
+      {"name": "SubProcess6", "type": "StringType", "nullable": true},
       {"name": "ActivityDescription", "type": "StringType", "nullable": true},
-      {"name": "Capacity", "type": "StringType", "nullable": true},
-      {"name": "SLAStart", "type": "TimestampType", "nullable": true},
-      {"name": "SLAEnd", "type": "TimestampType", "nullable": true},
-      {"name": "Identify", "type": "StringType", "nullable": true},
-      // ... other fields as per the full CSV column list
+      {"name": "Centre", "type": "StringType", "nullable": true},
+      {"name": "Capacity_Planning_Group", "type": "StringType", "nullable": true},
+      {"name": "SLATarget", "type": "TimestampType", "nullable": true},
+      {"name": "SLATargetUnit", "type": "TimestampType", "nullable": true},
+      {"name": "JoinKey", "type": "StringType", "nullable": true},
     ]
   }
 }
