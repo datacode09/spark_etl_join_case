@@ -1,0 +1,48 @@
+{
+  "primary_data_source": "/path/to/primary/data",
+  "activity_list_data_source": "/path/to/activity/data",
+  "activity_data_output_path": "/path/to/output/activity_data",
+  "employee_hierarchy_output_path": "/path/to/output/employee_hierarchy",
+  "output_path": "/path/to/final/output",
+  "include_activity_data_enrichment": true,
+  "include_employee_hierarchy_enrichment": true,
+  "employee_info_json_column": "details_json",
+  "schemas": {
+    "primary_data_schema": [
+        {"name": "data_source", "type": "StringType", "nullable": true},
+        {"name": "event_id", "type": "IntegerType", "nullable": true},
+        {"name": "activity_reference_id", "type": "StringType", "nullable": true},
+        {"name": "activity_received_timestamp", "type": "TimestampType", "nullable": true},
+        {"name": "activity_latest_timestamp", "type": "TimestampType", "nullable": true},
+        {"name": "activity_latest_status", "type": "StringType", "nullable": true},
+        {"name": "touch_start_timestamp", "type": "TimestampType", "nullable": true},
+        {"name": "touch_status", "type": "StringType", "nullable": true},
+        {"name": "process", "type": "StringType", "nullable": true},
+        {"name": "subprocess_1", "type": "StringType", "nullable": true},
+        {"name": "subprocess_2", "type": "StringType", "nullable": true},
+        {"name": "subprocess_3", "type": "StringType", "nullable": true},
+        {"name": "subprocess_4", "type": "StringType", "nullable": true},
+        {"name": "subprocess_5", "type": "StringType", "nullable": true},
+        {"name": "subprocess_6", "type": "StringType", "nullable": true},
+        {"name": "incoming_volume", "type": "IntegerType", "nullable": true},
+        {"name": "duration", "type": "IntegerType", "nullable": true},
+        {"name": "csc_date", "type": "TimestampType", "nullable": true},
+        {"name": "within_sla", "type": "BooleanType", "nullable": true},
+        {"name": "additional_features", "type": "StringType", "nullable": true}
+      ],
+    "activity_data_schema": [
+      {"name": "DataSource", "type": "StringType", "nullable": true},
+      {"name": "SubProcess1", "type": "StringType", "nullable": true},
+      {"name": "SubProcess2", "type": "StringType", "nullable": true},
+      {"name": "SubProcess3", "type": "StringType", "nullable": true},
+      {"name": "SubProcess4", "type": "StringType", "nullable": true},
+      {"name": "SubProcess5", "type": "StringType", "nullable": true},
+      {"name": "ActivityDescription", "type": "StringType", "nullable": true},
+      {"name": "Capacity", "type": "StringType", "nullable": true},
+      {"name": "SLAStart", "type": "TimestampType", "nullable": true},
+      {"name": "SLAEnd", "type": "TimestampType", "nullable": true},
+      {"name": "Identify", "type": "StringType", "nullable": true},
+      // ... other fields as per the full CSV column list
+    ]
+  }
+}
