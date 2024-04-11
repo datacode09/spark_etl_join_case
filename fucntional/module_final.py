@@ -13,7 +13,6 @@ def get_spark_session(app_name="ETLFramework"):
 
 def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: StructType = None) -> DataFrame:
     logging.info("Extracting data from source: {}".format(source))
-    df = None  # Initialize df to ensure it's in scope for error checking later
     try:
         if isinstance(source, str):
             if source.endswith('.parquet'):
@@ -34,14 +33,20 @@ def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: Stru
             logging.info("Data loaded directly from DataFrame input.")
         else:
             raise ValueError("Source must be a path (str) or a DataFrame.")
+        
+        # Schema verification
+        if expected_schema and not df.schema == expected_schema:
+            error_msg = "Schema mismatch between expected and actual data."
+            logging.error(error_msg)
+            raise ValueError(error_msg)
+            
+        if df is not None:
+            df = incoming_vol_join_key_logic(df)
+            logging.info("Join key logic applied.")
+        return df
     except Exception as e:
         logging.error(f"Failed to load data from {source}: {e}")
         raise
-
-    if df is not None:
-        df = incoming_vol_join_key_logic(df)
-        logging.info("Join key logic applied.")
-    return df
 
 
 
@@ -73,7 +78,15 @@ def extract_activity_list_data(spark, nas_path: str, expected_schema: StructType
         logging.error(error_msg)
         raise ValueError(error_msg)
     try:
-        return spark.read.schema(expected_schema).csv(nas_path, header=True)
+        df = spark.read.schema(expected_schema).csv(nas_path, header=True)
+        
+        # Schema verification
+        if not df.schema == expected_schema:
+            error_msg = "Schema mismatch between expected and actual data."
+            logging.error(error_msg)
+            raise ValueError(error_msg)
+        
+        return df
     except Exception as e:
         logging.error("Failed to extract data from NAS at {}: {}".format(nas_path, e))
         raise
