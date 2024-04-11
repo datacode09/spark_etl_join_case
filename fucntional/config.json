@@ -44,7 +44,7 @@
       {"name": "Capacity_Planning_Group", "type": "StringType", "nullable": true},
       {"name": "SLATarget", "type": "TimestampType", "nullable": true},
       {"name": "SLATargetUnit", "type": "TimestampType", "nullable": true},
-      {"name": "JoinKey", "type": "StringType", "nullable": true},
+      {"name": "JoinKey", "type": "StringType", "nullable": true}
     ]
   }
 }
