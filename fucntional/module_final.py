@@ -13,32 +13,38 @@ def get_spark_session(app_name="ETLFramework"):
 
 def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: StructType = None) -> DataFrame:
     logging.info("Extracting data from source: {}".format(source))
-    if isinstance(source, str):
-        if source.endswith('.parquet'):
-            df = spark.read.parquet(source)
-            logging.info("Data loaded from Parquet file.")
-        elif os.path.isdir(source):
-            df = spark.read.parquet(f"{source}/*.parquet")
-            logging.info("Data loaded from Parquet directory.")
+    df = None  # Initialize df to ensure it's in scope for error checking later
+    try:
+        if isinstance(source, str):
+            if source.endswith('.parquet'):
+                df = spark.read.parquet(source)
+                logging.info("Data loaded from Parquet file.")
+            elif os.path.isdir(source):
+                df = spark.read.parquet(f"{source}/*.parquet")
+                logging.info("Data loaded from Parquet directory.")
+            else:
+                if not expected_schema:
+                    error_msg = "Expected schema must be provided for non-Parquet files."
+                    logging.error(error_msg)
+                    raise ValueError(error_msg)
+                df = spark.read.schema(expected_schema).csv(source, header=True)
+                logging.info("Data loaded from CSV file with explicit schema.")
+        elif isinstance(source, DataFrame):
+            df = source
+            logging.info("Data loaded directly from DataFrame input.")
         else:
-            if not expected_schema:
-                error_msg = "Expected schema must be provided for non-Parquet files, especially CSV."
-                logging.error(error_msg)
-                raise ValueError(error_msg)
-            df = spark.read.schema(expected_schema).csv(source, header=True)
-            logging.info("Data loaded from CSV file with explicit schema.")
-    elif isinstance(source, DataFrame):
-        df = source
-        logging.info("Data loaded directly from DataFrame input.")
-    else:
-        error_msg = "Source must be a path (str) or a DataFrame."
-        logging.error(error_msg)
-        raise ValueError(error_msg)
+            raise ValueError("Source must be a path (str) or a DataFrame.")
+    except Exception as e:
+        logging.error(f"Failed to load data from {source}: {e}")
+        raise
 
     if df is not None:
         df = incoming_vol_join_key_logic(df)
         logging.info("Join key logic applied.")
     return df
+
+
+
 
 def incoming_vol_join_key_logic(df: DataFrame) -> DataFrame:
     logging.info("Applying incoming volume join key logic.")
@@ -136,10 +142,9 @@ def merge_enriched_data(enriched_activity_data: DataFrame, enriched_emp_hierarch
     logging.info("Merging enriched data from activity and employee hierarchy data.")
     common_keys = find_common_join_keys(enriched_activity_data, enriched_emp_hierarchy_data)
     if not common_keys:
-        error_msg = "No suitable join columns were identified between the two enriched DataFrames."
-        logging.error(error_msg)
-        raise ValueError(error_msg)
-    
+        logging.warning("No suitable join columns identified; performing cross join.")
+        return enriched_activity_data.crossJoin(enriched_emp_hierarchy_data)
+
     merged_data = enriched_activity_data.join(enriched_emp_hierarchy_data, common_keys, 'outer')
     logging.info("Data merge completed.")
     return merged_data
@@ -147,24 +152,28 @@ def merge_enriched_data(enriched_activity_data: DataFrame, enriched_emp_hierarch
 def enhancement_workflow(spark, config):
     logging.info("Starting the enhancement workflow with configuration: {}".format(config))
     try:
-        primary_df = extract_incoming_vol_data(spark, config['primary_data_source'], config.get('primary_data_schema'))
+        primary_df = extract_incoming_vol_data(spark, config.get('primary_data_source'), config.get('primary_data_schema'))
 
         if config.get('include_activity_data_enrichment', False):
-            activity_list_df = extract_activity_list_data(spark, config['activity_list_data_source'], config['activity_data_schema'])
+            activity_list_df = extract_activity_list_data(spark, config.get('activity_list_data_source'), config.get('activity_data_schema'))
             enriched_activity_data = enrich_primary_with_activity_data(primary_df, activity_list_df)
             if activity_data_output_path := config.get('activity_data_output_path'):
                 enriched_activity_data.write.mode("overwrite").parquet(activity_data_output_path)
-                logging.info("Enriched activity data saved successfully at {}".format(activity_data_output_path))
+                logging.info("Enriched activity data saved at {}".format(activity_data_output_path))
 
         if config.get('include_employee_hierarchy_enrichment', False):
             emp_hierarchy_df = extract_emp_hierarchy_data(spark)
-            enriched_emp_hierarchy_data = enrich_primary_with_emp_hierarchy(primary_df, emp_hierarchy_df, config['employee_info_json_column'])
+            enriched_emp_hierarchy_data = enrich_primary_with_emp_hierarchy(primary_df, emp_hierarchy_df, config.get('employee_info_json_column'))
             if employee_hierarchy_output_path := config.get('employee_hierarchy_output_path'):
                 enriched_emp_hierarchy_data.write.mode("overwrite").parquet(employee_hierarchy_output_path)
-                logging.info("Enriched employee hierarchy data saved successfully at {}".format(employee_hierarchy_output_path))
+                logging.info("Enriched employee hierarchy data saved at {}".format(employee_hierarchy_output_path))
 
         if output_path := config.get('output_path'):
-            logging.info("Final merged output path specified but merge logic not implemented.")
+            logging.info("Final merged output path specified but merge logic now implemented.")
+            final_output = merge_enriched_data(enriched_activity_data, enriched_emp_hierarchy_data)
+            final_output.write.mode("overwrite").parquet(output_path)
+            logging.info("Final output saved at {}".format(output_path))
     except Exception as e:
         logging.error("Failed to complete the enhancement_workflow due to: {}".format(e))
         raise
+
