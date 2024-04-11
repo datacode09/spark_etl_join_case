@@ -1,9 +1,5 @@
 import json
-import logging
-from pyspark.sql import SparkSession
-
-# Import the module containing the ETL functions
-import etl_module
+from enhancement_module import get_spark_session, enhancement_workflow
 
 def main():
     """ Main function to run the ETL processes with minimal setup. """
@@ -15,12 +11,8 @@ def main():
         with open('config.json', 'r') as config_file:
             config = json.load(config_file)
 
-        # Start the Spark session
-        spark = SparkSession.builder.appName("EnhancedETLWorkflow").getOrCreate()
-        logging.info("Spark session initialized.")
-
         # Run the ETL workflow
-        etl_module.enhancement_workflow(spark, config)
+        etl_module.enhancement_workflow(spark=get_spark_session(app_name="enhancement_Framework"), config)
         logging.info("ETL workflow executed successfully.")
 
     except Exception as e:
