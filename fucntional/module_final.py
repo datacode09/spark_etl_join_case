@@ -203,13 +203,21 @@ def enhancement_workflow(spark, config):
         primary_schema = parse_schema(config.get('schemas')['primary_data_schema'])
         primary_df = extract_incoming_vol_data(spark, config.get('primary_data_source'), primary_schema)
 
+        # Apply join key logic to the primary data
+        primary_df_with_join_key = incoming_vol_join_key_logic(primary_df)
+
+        # Initialize a variable to hold the final output
+        final_output = primary_df_with_join_key
+
         # Check if activity data enrichment is enabled in the configuration
         if config.get('include_activity_data_enrichment', False):
             # Parse activity data schema and extract data
             activity_schema = parse_schema(config.get('schemas')['activity_data_schema'])
             activity_list_df = extract_activity_list_data(spark, config.get('activity_list_data_source'), activity_schema)
+            
             # Enrich primary data with activity data
-            enriched_activity_data = enrich_primary_with_activity_data(primary_df, activity_list_df)
+            enriched_activity_data = enrich_primary_with_activity_data(primary_df_with_join_key, activity_list_df)
+            final_output = enriched_activity_data
             
             # Check if there is a configured path for outputting enriched activity data
             activity_data_output_path = config.get('activity_data_output_path')
@@ -220,10 +228,11 @@ def enhancement_workflow(spark, config):
 
         # Check if employee hierarchy enrichment is enabled in the configuration
         if config.get('include_employee_hierarchy_enrichment', False):
-            # Extract employee hierarchy data (assuming function is defined elsewhere)
+            # Extract employee hierarchy data
             emp_hierarchy_df = extract_emp_hierarchy_data(spark)
             # Enrich primary data with employee hierarchy data using a specific column for joining
-            enriched_emp_hierarchy_data = enrich_primary_with_emp_hierarchy(primary_df, emp_hierarchy_df, config.get('employee_info_json_column'))
+            enriched_emp_hierarchy_data = enrich_primary_with_emp_hierarchy(primary_df_with_join_key, emp_hierarchy_df, config.get('employee_info_json_column'))
+            final_output = enriched_emp_hierarchy_data
             
             # Check if there is a configured path for outputting enriched employee hierarchy data
             employee_hierarchy_output_path = config.get('employee_hierarchy_output_path')
@@ -234,13 +243,13 @@ def enhancement_workflow(spark, config):
 
         # Check if there is a final output path configured for merged data
         output_path = config.get('output_path')
-        if output_path:
-            logging.info("Final merged output path specified but merge logic not implemented.")
-            # Merge enriched data sets (assuming function is defined elsewhere)
+        if output_path and 'include_activity_data_enrichment' in config and 'include_employee_hierarchy_enrichment' in config:
+            # Merge enriched data sets if both enrichments are applied
             final_output = merge_enriched_data(enriched_activity_data, enriched_emp_hierarchy_data)
             # Write final output to specified path
             final_output.write.mode("overwrite").parquet(output_path)
             logging.info("Final output saved at {}".format(output_path))
+
     except Exception as e:
         # Log any exceptions that occur during the process
         logging.error("Failed to complete the enhancement_workflow due to: {}".format(e))
