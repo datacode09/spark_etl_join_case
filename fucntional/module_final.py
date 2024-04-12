@@ -195,63 +195,73 @@ def parse_schema(schema_json):
     ])
 
 # Main workflow function
+import datetime
+import datetime
+import logging
+
 def enhancement_workflow(spark, config):
-    # Log the beginning of the process
     logging.info("Starting the enhancement workflow with configuration: {}".format(config))
     try:
-        # Parse primary data schema from configuration and extract data
+        # Extract primary data with its schema
         primary_schema = parse_schema(config.get('schemas')['primary_data_schema'])
         primary_df = extract_incoming_vol_data(spark, config.get('primary_data_source'), primary_schema)
-
-        # Apply join key logic to the primary data
+        
+        # Apply join key logic
         primary_df_with_join_key = incoming_vol_join_key_logic(primary_df)
 
-        # Initialize a variable to hold the final output
-        final_output = primary_df_with_join_key
+        # Flags to determine if either enrichment is enabled
+        activity_enrichment_enabled = config.get('include_activity_data_enrichment', False)
+        employee_hierarchy_enrichment_enabled = config.get('include_employee_hierarchy_enrichment', False)
 
-        # Check if activity data enrichment is enabled in the configuration
-        if config.get('include_activity_data_enrichment', False):
-            # Parse activity data schema and extract data
+        # Current date for file naming
+        current_date = datetime.datetime.now().strftime("%Y%m%d")
+
+        # Enrichments processing
+        if activity_enrichment_enabled:
             activity_schema = parse_schema(config.get('schemas')['activity_data_schema'])
             activity_list_df = extract_activity_list_data(spark, config.get('activity_list_data_source'), activity_schema)
-            
-            # Enrich primary data with activity data
             enriched_activity_data = enrich_primary_with_activity_data(primary_df_with_join_key, activity_list_df)
-            final_output = enriched_activity_data
-            
-            # Check if there is a configured path for outputting enriched activity data
+            # Save and log the activity data if path is provided (assumed HDFS path)
             activity_data_output_path = config.get('activity_data_output_path')
             if activity_data_output_path:
-                # Write enriched data to specified path
-                enriched_activity_data.write.mode("overwrite").parquet(activity_data_output_path)
-                logging.info("Enriched activity data saved at {}".format(activity_data_output_path))
+                activity_data_final_path = f"hdfs://{activity_data_output_path}/activity_data_{current_date}"
+                enriched_activity_data.write.mode("overwrite").parquet(activity_data_final_path)
+                logging.info(f"Enriched activity data saved at {activity_data_final_path}")
+        else:
+            enriched_activity_data = None
 
-        # Check if employee hierarchy enrichment is enabled in the configuration
-        if config.get('include_employee_hierarchy_enrichment', False):
-            # Extract employee hierarchy data
+        if employee_hierarchy_enrichment_enabled:
             emp_hierarchy_df = extract_emp_hierarchy_data(spark)
-            # Enrich primary data with employee hierarchy data using a specific column for joining
             enriched_emp_hierarchy_data = enrich_primary_with_emp_hierarchy(primary_df_with_join_key, emp_hierarchy_df, config.get('employee_info_json_column'))
-            final_output = enriched_emp_hierarchy_data
-            
-            # Check if there is a configured path for outputting enriched employee hierarchy data
+            # Save and log the employee hierarchy data if path is provided (assumed HDFS path)
             employee_hierarchy_output_path = config.get('employee_hierarchy_output_path')
             if employee_hierarchy_output_path:
-                # Write enriched data to specified path
-                enriched_emp_hierarchy_data.write.mode("overwrite").parquet(employee_hierarchy_output_path)
-                logging.info("Enriched employee hierarchy data saved at {}".format(employee_hierarchy_output_path))
+                employee_hierarchy_final_path = f"hdfs://{employee_hierarchy_output_path}/employee_hierarchy_{current_date}"
+                enriched_emp_hierarchy_data.write.mode("overwrite").parquet(employee_hierarchy_final_path)
+                logging.info(f"Enriched employee hierarchy data saved at {employee_hierarchy_final_path}")
+        else:
+            enriched_emp_hierarchy_data = None
 
-        # Check if there is a final output path configured for merged data
-        output_path = config.get('output_path')
-        if output_path and 'include_activity_data_enrichment' in config and 'include_employee_hierarchy_enrichment' in config:
-            # Merge enriched data sets if both enrichments are applied
+        # Both enrichments must be enabled to proceed to output
+        if activity_enrichment_enabled and employee_hierarchy_enrichment_enabled:
             final_output = merge_enriched_data(enriched_activity_data, enriched_emp_hierarchy_data)
-            # Write final output to specified path
-            final_output.write.mode("overwrite").parquet(output_path)
-            logging.info("Final output saved at {}".format(output_path))
+            output_path = config.get('output_path')
+            if output_path:
+                final_output_path = f"hdfs://{output_path}/output_{current_date}"
+                final_output.write.mode("overwrite").parquet(final_output_path)
+                logging.info(f"Final output saved at {final_output_path}")
+        else:
+            # If both enrichments are disabled, log a warning
+            if not activity_enrichment_enabled and not employee_hierarchy_enrichment_enabled:
+                logging.warning("Both enrichments are set to false - please check.")
+            else:
+                logging.info("Only one enrichment process is configured; no final output will be written.")
 
     except Exception as e:
-        # Log any exceptions that occur during the process
-        logging.error("Failed to complete the enhancement_workflow due to: {}".format(e))
+        logging.error(f"Failed to complete the enhancement workflow due to: {e}")
         raise
+
+        raise
+
+
 
