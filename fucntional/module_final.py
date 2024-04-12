@@ -12,13 +12,13 @@ def get_spark_session(app_name="ETLFramework"):
     return SparkSession.builder.appName(app_name).getOrCreate()
 
 def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: StructType = None) -> DataFrame:
-    logging.info("Extracting data from source: {}".format(source))
+    logging.info(f"Extracting data from source: {source}")
     try:
         if isinstance(source, str):
             if source.endswith('.parquet'):
                 df = spark.read.parquet(source)
                 logging.info("Data loaded from Parquet file.")
-            elif os.path.isdir(source):
+            elif os.path.isdir(source) and any(fname.endswith('.parquet') for fname in os.listdir(source)):
                 df = spark.read.parquet(f"{source}/*.parquet")
                 logging.info("Data loaded from Parquet directory.")
             else:
@@ -33,19 +33,9 @@ def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: Stru
             logging.info("Data loaded directly from DataFrame input.")
         else:
             raise ValueError("Source must be a path (str) or a DataFrame.")
-        
-        # Schema verification
-        if expected_schema and not df.schema == expected_schema:
-            error_msg = "Schema mismatch between expected and actual data."
-            logging.error(error_msg)
-            raise ValueError(error_msg)
-            
-        if df is not None:
-            df = incoming_vol_join_key_logic(df)
-            logging.info("Join key logic applied.")
         return df
     except Exception as e:
-        logging.error(f"Failed to load data from {source}: {e}")
+        logging.error(f"Failed to load data due to: {str(e)}")
         raise
 
 
