@@ -261,7 +261,6 @@ def enhancement_workflow(spark, config):
         logging.error(f"Failed to complete the enhancement workflow due to: {e}")
         raise
 
-        raise
 
 
 
