@@ -11,6 +11,11 @@ def get_spark_session(app_name="ETLFramework"):
     logging.info("Initializing Spark session with app name: {}".format(app_name))
     return SparkSession.builder.appName(app_name).getOrCreate()
 
+import os
+import logging
+from pyspark.sql import SparkSession, DataFrame
+from pyspark.sql.types import StructType
+
 def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: StructType = None) -> DataFrame:
     logging.info(f"Extracting data from source: {source}")
     try:
@@ -18,9 +23,23 @@ def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: Stru
             if source.endswith('.parquet'):
                 df = spark.read.parquet(source)
                 logging.info("Data loaded from Parquet file.")
-            elif os.path.isdir(source) and any(fname.endswith('.parquet') for fname in os.listdir(source)):
-                df = spark.read.parquet(f"{source}/*.parquet")
-                logging.info("Data loaded from Parquet directory.")
+                if expected_schema and not df.schema == expected_schema:
+                    error_msg = "Loaded Parquet file schema does not match the expected schema."
+                    logging.error(error_msg)
+                    raise ValueError(error_msg)
+            elif os.path.isdir(source) or source.startswith("hdfs://"):
+                # Additional check for directories on HDFS or local containing Parquet files
+                if source.startswith("hdfs://") or any(fname.endswith('.parquet') for fname in os.listdir(source)):
+                    df = spark.read.parquet(f"{source}/*.parquet")
+                    logging.info("Data loaded from Parquet directory.")
+                    if expected_schema and not df.schema == expected_schema:
+                        error_msg = "Loaded Parquet directory schema does not match the expected schema."
+                        logging.error(error_msg)
+                        raise ValueError(error_msg)
+                else:
+                    error_msg = "Directory does not contain any Parquet files."
+                    logging.error(error_msg)
+                    raise ValueError(error_msg)
             else:
                 if not expected_schema:
                     error_msg = "Expected schema must be provided for non-Parquet files."
@@ -31,12 +50,27 @@ def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: Stru
         elif isinstance(source, DataFrame):
             df = source
             logging.info("Data loaded directly from DataFrame input.")
+            if expected_schema and not df.schema == expected_schema:
+                error_msg = "Provided DataFrame schema does not match the expected schema."
+                logging.error(error_msg)
+                raise ValueError(error_msg)
         else:
             raise ValueError("Source must be a path (str) or a DataFrame.")
         return df
     except Exception as e:
         logging.error(f"Failed to load data due to: {str(e)}")
         raise
+
+# Example usage
+if __name__ == "__main__":
+    spark_session = SparkSession.builder.appName("Data Extraction").getOrCreate()
+    try:
+        df = extract_incoming_vol_data(spark_session, "/path/to/data", expected_schema=StructType([...]))
+        # Proceed with further data processing
+    except Exception as error:
+        logging.error("An error occurred during data extraction: {}".format(str(error)))
+    spark_session.stop()
+
 
 
 
