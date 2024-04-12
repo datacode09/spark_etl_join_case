@@ -3,6 +3,7 @@ from pyspark.sql.functions import coalesce, lit, concat, concat_ws, col, trim, u
 from pyspark.sql.types import StructType, StructField, StringType, IntegerType, BooleanType, TimestampType
 import logging
 import os
+import pyarrow as pa
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -11,65 +12,56 @@ def get_spark_session(app_name="ETLFramework"):
     logging.info("Initializing Spark session with app name: {}".format(app_name))
     return SparkSession.builder.appName(app_name).getOrCreate()
 
-import os
-import logging
-from pyspark.sql import SparkSession, DataFrame
-from pyspark.sql.types import StructType
 
 def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: StructType = None) -> DataFrame:
     logging.info(f"Extracting data from source: {source}")
     try:
+        # Initialize HDFS connection
+        hdfs = pa.hdfs.connect()
+
         if isinstance(source, str):
-            if source.endswith('.parquet'):
+            # Check if source is a directory or a file in HDFS
+            if hdfs.isfile(source) and source.endswith('.parquet'):
                 df = spark.read.parquet(source)
                 logging.info("Data loaded from Parquet file.")
-                if expected_schema and not df.schema == expected_schema:
-                    error_msg = "Loaded Parquet file schema does not match the expected schema."
-                    logging.error(error_msg)
-                    raise ValueError(error_msg)
-            elif os.path.isdir(source) or source.startswith("hdfs://"):
-                # Additional check for directories on HDFS or local containing Parquet files
-                if source.startswith("hdfs://") or any(fname.endswith('.parquet') for fname in os.listdir(source)):
-                    df = spark.read.parquet(f"{source}/*.parquet")
-                    logging.info("Data loaded from Parquet directory.")
-                    if expected_schema and not df.schema == expected_schema:
-                        error_msg = "Loaded Parquet directory schema does not match the expected schema."
-                        logging.error(error_msg)
-                        raise ValueError(error_msg)
-                else:
-                    error_msg = "Directory does not contain any Parquet files."
-                    logging.error(error_msg)
-                    raise ValueError(error_msg)
-            else:
+            elif hdfs.exists(source) and any(hdfs.isfile(os.path.join(source, f)) and f.endswith('.parquet') for f in hdfs.ls(source)):
+                df = spark.read.parquet(source)
+                logging.info("Data loaded from Parquet directory.")
+            elif hdfs.exists(source):
                 if not expected_schema:
-                    error_msg = "Expected schema must be provided for non-Parquet files."
+                    error_msg = "Expected schema must be provided for CSV files."
                     logging.error(error_msg)
                     raise ValueError(error_msg)
                 df = spark.read.schema(expected_schema).csv(source, header=True)
                 logging.info("Data loaded from CSV file with explicit schema.")
+            else:
+                error_msg = "The specified HDFS path does not exist."
+                logging.error(error_msg)
+                raise FileNotFoundError(error_msg)
+
         elif isinstance(source, DataFrame):
             df = source
             logging.info("Data loaded directly from DataFrame input.")
-            if expected_schema and not df.schema == expected_schema:
-                error_msg = "Provided DataFrame schema does not match the expected schema."
-                logging.error(error_msg)
-                raise ValueError(error_msg)
         else:
             raise ValueError("Source must be a path (str) or a DataFrame.")
+
+        # Perform schema validation if expected_schema is provided
+        if expected_schema and df.schema != expected_schema:
+            error_msg = "Data schema does not match the expected schema."
+            logging.error(error_msg)
+            raise ValueError(error_msg)
+
+        # Close the HDFS connection
+        hdfs.close()
+
         return df
+
     except Exception as e:
         logging.error(f"Failed to load data due to: {str(e)}")
+        if 'hdfs' in locals():
+            hdfs.close()
         raise
 
-# Example usage
-if __name__ == "__main__":
-    spark_session = SparkSession.builder.appName("Data Extraction").getOrCreate()
-    try:
-        df = extract_incoming_vol_data(spark_session, "/path/to/data", expected_schema=StructType([...]))
-        # Proceed with further data processing
-    except Exception as error:
-        logging.error("An error occurred during data extraction: {}".format(str(error)))
-    spark_session.stop()
 
 
 
