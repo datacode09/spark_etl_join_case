@@ -178,31 +178,71 @@ def merge_enriched_data(enriched_activity_data: DataFrame, enriched_emp_hierarch
     logging.info("Data merge completed.")
     return merged_data
 
+# Define a function to parse JSON schema into PySpark StructType
+def parse_schema(schema_json):
+    from pyspark.sql.types import StringType, IntegerType, TimestampType, BooleanType, StructField
+    # Map string type names to PySpark classes
+    type_mapping = {
+        "StringType": StringType,
+        "IntegerType": IntegerType,
+        "TimestampType": TimestampType,
+        "BooleanType": BooleanType
+    }
+    # Convert list of field definitions into StructType
+    return StructType([
+        StructField(field['name'], type_mapping[field['type']](), nullable=field['nullable'])
+        for field in schema_json
+    ])
+
+# Main workflow function
 def enhancement_workflow(spark, config):
+    # Log the beginning of the process
     logging.info("Starting the enhancement workflow with configuration: {}".format(config))
     try:
-        primary_df = extract_incoming_vol_data(spark, config.get('primary_data_source'), config.get('primary_data_schema'))
+        # Parse primary data schema from configuration and extract data
+        primary_schema = parse_schema(config.get('schemas')['primary_data_schema'])
+        primary_df = extract_incoming_vol_data(spark, config.get('primary_data_source'), primary_schema)
 
+        # Check if activity data enrichment is enabled in the configuration
         if config.get('include_activity_data_enrichment', False):
-            activity_list_df = extract_activity_list_data(spark, config.get('activity_list_data_source'), config.get('activity_data_schema'))
+            # Parse activity data schema and extract data
+            activity_schema = parse_schema(config.get('schemas')['activity_data_schema'])
+            activity_list_df = extract_activity_list_data(spark, config.get('activity_list_data_source'), activity_schema)
+            # Enrich primary data with activity data
             enriched_activity_data = enrich_primary_with_activity_data(primary_df, activity_list_df)
-            if activity_data_output_path := config.get('activity_data_output_path'):
+            
+            # Check if there is a configured path for outputting enriched activity data
+            activity_data_output_path = config.get('activity_data_output_path')
+            if activity_data_output_path:
+                # Write enriched data to specified path
                 enriched_activity_data.write.mode("overwrite").parquet(activity_data_output_path)
                 logging.info("Enriched activity data saved at {}".format(activity_data_output_path))
 
+        # Check if employee hierarchy enrichment is enabled in the configuration
         if config.get('include_employee_hierarchy_enrichment', False):
+            # Extract employee hierarchy data (assuming function is defined elsewhere)
             emp_hierarchy_df = extract_emp_hierarchy_data(spark)
+            # Enrich primary data with employee hierarchy data using a specific column for joining
             enriched_emp_hierarchy_data = enrich_primary_with_emp_hierarchy(primary_df, emp_hierarchy_df, config.get('employee_info_json_column'))
-            if employee_hierarchy_output_path := config.get('employee_hierarchy_output_path'):
+            
+            # Check if there is a configured path for outputting enriched employee hierarchy data
+            employee_hierarchy_output_path = config.get('employee_hierarchy_output_path')
+            if employee_hierarchy_output_path:
+                # Write enriched data to specified path
                 enriched_emp_hierarchy_data.write.mode("overwrite").parquet(employee_hierarchy_output_path)
                 logging.info("Enriched employee hierarchy data saved at {}".format(employee_hierarchy_output_path))
 
-        if output_path := config.get('output_path'):
-            logging.info("Final merged output path specified but merge logic now implemented.")
+        # Check if there is a final output path configured for merged data
+        output_path = config.get('output_path')
+        if output_path:
+            logging.info("Final merged output path specified but merge logic not implemented.")
+            # Merge enriched data sets (assuming function is defined elsewhere)
             final_output = merge_enriched_data(enriched_activity_data, enriched_emp_hierarchy_data)
+            # Write final output to specified path
             final_output.write.mode("overwrite").parquet(output_path)
             logging.info("Final output saved at {}".format(output_path))
     except Exception as e:
+        # Log any exceptions that occur during the process
         logging.error("Failed to complete the enhancement_workflow due to: {}".format(e))
         raise
 
