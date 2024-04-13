@@ -9,9 +9,35 @@ import pyarrow as pa
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def get_spark_session(app_name="ETLFramework"):
-    logging.info("Initializing Spark session with app name: {}".format(app_name))
-    return SparkSession.builder.appName(app_name).getOrCreate()
+    """
+    Create and configure a SparkSession instance with advanced settings,
+    including Hive support and optimized configurations for performance.
+    """
+    logging.info(f"Initializing Spark session with app name: {app_name}")
 
+    spark = SparkSession.builder \
+        .appName(app_name) \
+        .config("spark.master", "yarn") \
+        .config("spark.executor.memory", "4g") \
+        .config("spark.driver.memory", "4g") \
+        .config("spark.executor.memoryOverhead", "512m") \
+        .config("spark.sql.shuffle.partitions", "200") \
+        .config("spark.dynamicAllocation.enabled", "true") \
+        .config("spark.dynamicAllocation.minExecutors", "1") \
+        .config("spark.dynamicAllocation.maxExecutors", "20") \
+        .config("spark.dynamicAllocation.initialExecutors", "3") \
+        .config("spark.sql.autoBroadcastJoinThreshold", "10485760") \
+        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") \
+        .config("spark.kryo.registrationRequired", "true") \
+        .config("spark.sql.execution.arrow.pyspark.enabled", "true") \
+        .config("spark.sql.parquet.binaryAsString", "true") \
+        .config("spark.port.maxRetries", "50") \
+        .config("spark.sql.execution.arrow.enabled", "false")  # Arrow is disabled here; ensure it's deliberate
+        .enableHiveSupport() \
+        .getOrCreate()
+
+    logging.info(f"Spark session created successfully with app name: {app_name}")
+    return spark
 
 def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: StructType = None) -> DataFrame:
     logging.info(f"Extracting data from source: {source}")
