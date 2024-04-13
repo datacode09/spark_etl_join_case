@@ -1,5 +1,14 @@
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col, broadcast, sha2, approx_count_distinct, lit, coalesce
+# Initialize SparkSession with optimized configurations
+spark = SparkSession.builder \
+    .appName("Advanced Intelligent Join Spark ETL") \
+    .config("spark.executor.memory", "4g") \
+    .config("spark.driver.memory", "4g") \
+    .config("spark.executor.memoryOverhead", "512m") \
+    .config("spark.sql.shuffle.partitions", "200") \
+    .getOrCreate()
+
 
 def decide_broadcast(df1: DataFrame, df2: DataFrame, join_key1: str, join_key2: str, spark: SparkSession) -> (bool, DataFrame):
     """
