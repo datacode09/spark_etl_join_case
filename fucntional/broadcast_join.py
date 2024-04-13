@@ -64,3 +64,38 @@ def enrich_primary_with_activity_data(primary_df: DataFrame, activity_df: DataFr
 
     logging.info("Primary data enrichment with activity data completed using Spark SQL.")
     return enriched_output
+
+
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql.functions import col, broadcast, sha2, approx_count_distinct
+
+def enrich_primary_with_emp_hierarchy(primary_df_with_join_key: DataFrame, emp_hierarchy_df: DataFrame, json_column_name: str, spark: SparkSession) -> DataFrame:
+    logging.info("Enriching primary DataFrame with employee hierarchy data.")
+    try:
+        # Extract employee number from JSON column
+        primary_df_with_employee_number = extract_employee_number_from_json(primary_df_with_join_key, json_column_name, "employee_number")
+        
+        # Determine if broadcasting is necessary and which DataFrame should be broadcast
+        should_broadcast, df_to_broadcast = decide_broadcast(primary_df_with_employee_number, emp_hierarchy_df, "employee_number", "employeeid", spark)
+
+        # Apply broadcasting decision
+        if should_broadcast:
+            if df_to_broadcast == primary_df_with_employee_number:
+                logging.info("Broadcasting primary DataFrame based on analysis.")
+                primary_df_with_employee_number = broadcast(primary_df_with_employee_number)
+            else:
+                logging.info("Broadcasting employee hierarchy DataFrame based on analysis.")
+                emp_hierarchy_df = broadcast(emp_hierarchy_df)
+
+        # Perform the join operation
+        enriched_output = primary_df_with_employee_number.join(
+            emp_hierarchy_df, 
+            primary_df_with_employee_number["employee_number"] == emp_hierarchy_df["employeeid"], 
+            "left_outer"
+        )
+
+        logging.info("Primary data enrichment with employee hierarchy completed.")
+        return enriched_output
+    except Exception as e:
+        logging.error(f"Error enriching primary data with employee hierarchy: {str(e)}")
+        raise
