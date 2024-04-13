@@ -99,3 +99,37 @@ def enrich_primary_with_emp_hierarchy(primary_df_with_join_key: DataFrame, emp_h
     except Exception as e:
         logging.error(f"Error enriching primary data with employee hierarchy: {str(e)}")
         raise
+
+def merge_enriched_data(enriched_activity_data: DataFrame, enriched_emp_hierarchy_data: DataFrame, spark: SparkSession) -> DataFrame:
+    logging.info("Merging enriched data from activity and employee hierarchy data.")
+
+    # Determine if broadcasting is necessary and which DataFrame should be broadcast
+    should_broadcast, df_to_broadcast = decide_broadcast(
+        enriched_activity_data, enriched_emp_hierarchy_data, 
+        "join_key_activity", "join_key_emp_hierarchy", spark
+    )
+
+    # Apply broadcasting decision
+    if should_broadcast:
+        if df_to_broadcast == enriched_activity_data:
+            logging.info("Broadcasting activity data DataFrame for the merge operation.")
+            enriched_activity_data = broadcast(enriched_activity_data)
+        else:
+            logging.info("Broadcasting employee hierarchy DataFrame for the merge operation.")
+            enriched_emp_hierarchy_data = broadcast(enriched_emp_hierarchy_data)
+
+    # Find common join keys to use for the merge
+    common_keys = find_common_join_keys(enriched_activity_data, enriched_emp_hierarchy_data)
+    if not common_keys:
+        logging.warning("No suitable join columns identified; performing cross join.")
+        merged_data = enriched_activity_data.crossJoin(enriched_emp_hierarchy_data)
+    else:
+        # Perform the join using the common keys found or perform an outer join
+        merged_data = enriched_activity_data.join(
+            enriched_emp_hierarchy_data, 
+            common_keys, 
+            'outer'
+        )
+
+    logging.info("Data merge completed.")
+    return merged_data
