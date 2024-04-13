@@ -1,13 +1,22 @@
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col, broadcast, sha2, approx_count_distinct, lit, coalesce
 # Initialize SparkSession with optimized configurations
-spark = SparkSession.builder \
-    .appName("Advanced Intelligent Join Spark ETL") \
-    .config("spark.executor.memory", "4g") \
-    .config("spark.driver.memory", "4g") \
-    .config("spark.executor.memoryOverhead", "512m") \
-    .config("spark.sql.shuffle.partitions", "200") \
-    .getOrCreate()
+    spark = SparkSession.builder \
+        .appName("Advanced Data Merging Application") \
+        .config("spark.master", "yarn") \
+        .config("spark.executor.memory", "4g") \
+        .config("spark.driver.memory", "4g") \
+        .config("spark.executor.memoryOverhead", "512m") \
+        .config("spark.sql.shuffle.partitions", "200") \
+        .config("spark.dynamicAllocation.enabled", "true") \
+        .config("spark.dynamicAllocation.minExecutors", "1") \
+        .config("spark.dynamicAllocation.maxExecutors", "20") \
+        .config("spark.dynamicAllocation.initialExecutors", "3") \
+        .config("spark.sql.autoBroadcastJoinThreshold", "10485760")  # Set to 10MB, adjust as needed
+        .config("spark.serializer", "org.apache.spark.serializer.KryoSerializer") \
+        .config("spark.kryo.registrationRequired", "true") \
+        .config("spark.sql.execution.arrow.pyspark.enabled", "true")  # Enable Arrow for better performance in data transfer
+        .getOrCreate()
 
 
 def decide_broadcast(df1: DataFrame, df2: DataFrame, join_key1: str, join_key2: str, spark: SparkSession) -> (bool, DataFrame):
