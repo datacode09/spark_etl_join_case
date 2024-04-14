@@ -93,22 +93,51 @@ def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: Stru
 
 
 
+# def incoming_vol_join_key_logic(df: DataFrame) -> DataFrame:
+#     logging.info("Applying incoming volume join key logic.")
+#     columns_to_transform = [
+#         "data_source", "process", "subprocess_1", "subprocess_2",
+#         "subprocess_3", "subprocess_5", "subprocess_6"
+#     ]
+
+#     df = df.withColumn(
+#         "JoinKey",
+#         when(col("data_source") == "CART",
+#              concat_ws("|", *[transform_column(c) for c in columns_to_transform], lit(""), transform_column("subprocess_6"), lit("|"))
+#         ).otherwise(
+#             concat_ws("|", *[transform_column(c) for c in columns_to_transform[:4]], transform_column("subprocess_4"), *[transform_column(c) for c in columns_to_transform[4:]], lit("|"))
+#         )
+#     )
+#     return df
+
 def incoming_vol_join_key_logic(df: DataFrame) -> DataFrame:
     logging.info("Applying incoming volume join key logic.")
-    columns_to_transform = [
-        "data_source", "process", "subprocess_1", "subprocess_2",
-        "subprocess_3", "subprocess_5", "subprocess_6"
-    ]
-
     df = df.withColumn(
         "JoinKey",
         when(col("data_source") == "CART",
-             concat_ws("|", *[transform_column(c) for c in columns_to_transform], lit(""), transform_column("subprocess_6"), lit("|"))
+             concat_ws("|",
+                       transform_column("data_source"),
+                       transform_column("process"),
+                       transform_column("subprocess_1"),
+                       transform_column("subprocess_2"),
+                       transform_column("subprocess_3"),
+                       transform_column("subprocess_5"),
+                       transform_column("subprocess_6"))
         ).otherwise(
-            concat_ws("|", *[transform_column(c) for c in columns_to_transform[:4]], transform_column("subprocess_4"), *[transform_column(c) for c in columns_to_transform[4:]], lit("|"))
+            concat_ws("|",
+                      transform_column("data_source"),
+                      transform_column("process"),
+                      transform_column("subprocess_1"),
+                      transform_column("subprocess_2"),
+                      transform_column("subprocess_3"),
+                      transform_column("subprocess_4"),
+                      transform_column("subprocess_5"),
+                      transform_column("subprocess_6"),
+                      lit("|"))
         )
     )
     return df
+
 
 def transform_column(col_name):
     return trim(upper(regexp_replace(col(col_name), "\\W", "")))
