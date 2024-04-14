@@ -50,6 +50,40 @@ def test_find_common_join_keys():
     except Exception as e:
         logging.error(f"Test failed: {e}")
 
+def test_incoming_vol_join_key_logic_and_transform():
+    schema = StructType([
+        StructField("data_source", StringType(), True),
+        StructField("process", StringType(), True),
+        StructField("subprocess_1", StringType(), True),
+        StructField("subprocess_2", StringType(), True),
+        StructField("subprocess_3", StringType(), True),
+        StructField("subprocess_4", StringType(), True),
+        StructField("subprocess_5", StringType(), True),
+        StructField("subprocess_6", StringType(), True),
+    ])
+
+    data = [("cart", "Process1", "Sub1", "Sub2", "Sub3", "Sub4", "Sub5", "Sub6"),
+            ("noncart", "process2", "sub1", "sub2", "sub3", "sub4", "sub5", "sub6")]
+
+    df = spark.createDataFrame(data, schema)
+
+    result_df = incoming_vol_join_key_logic(df)
+
+    result_df.show(truncate=False)
+
+    expected_join_keys = [
+        "CART|PROCESS1|SUB1|SUB2|SUB3|SUB5|SUB6",
+        "NONCART|PROCESS2|SUB1|SUB2|SUB3|SUB4|SUB5|SUB6|"
+    ]
+
+    actual_join_keys = [row['JoinKey'] for row in result_df.collect()]
+
+    assert actual_join_keys == expected_join_keys, "JoinKey values are incorrect"
+
+    logging.info("Test for transform and incoming_vol_join_key_logic passed successfully.")
+
+    spark.stop()
+
 def test_extract_activity_list_data_with_correct_schema():
     test_path = config['activity_list_data_source']
     test_schema = get_schema(config['schemas']['activity_data_schema'])
