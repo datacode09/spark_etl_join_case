@@ -142,6 +142,42 @@ def incoming_vol_join_key_logic(df: DataFrame) -> DataFrame:
 def transform_column(col_name):
     return trim(upper(regexp_replace(col(col_name), "\\W", "")))
 
+import logging
+import pandas as pd
+from pyspark.sql import DataFrame, SparkSession
+from pyspark.sql.types import StructType
+
+def extract_activity_list_data_v2(spark: SparkSession, csv_path: str, expected_schema: StructType) -> DataFrame:
+    logging.info(f"Extracting activity list data from: {csv_path}")
+    
+    if not expected_schema:
+        error_msg = "Expected schema must be provided for activity list data."
+        logging.error(error_msg)
+        raise ValueError(error_msg)
+
+    try:
+        # Read the data using pandas
+        pd_df = pd.read_csv(csv_path)
+        
+        # Convert the pandas DataFrame to a Spark DataFrame using the expected schema
+        df = spark.createDataFrame(pd_df, schema=expected_schema)
+        
+        # Schema verification
+        if df.schema != expected_schema:
+            error_msg = "Schema mismatch between expected and actual data."
+            logging.error(error_msg)
+            raise ValueError(error_msg)
+        
+        # As pandas DataFrame is no longer needed, we ensure it's not used hereafter
+        del pd_df
+        
+        return df
+
+    except Exception as e:
+        logging.error(f"Failed to extract data from CSV at {csv_path}: {e}")
+        raise
+
+
 def extract_activity_list_data(spark, nas_path: str, expected_schema: StructType) -> DataFrame:
     logging.info("Extracting activity list data from: {}".format(nas_path))
     if not expected_schema:
