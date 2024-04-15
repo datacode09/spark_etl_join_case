@@ -4,6 +4,7 @@ from pyspark.sql.types import StructType, StructField, StringType, IntegerType, 
 import logging
 import os
 import pyarrow as pa
+import pandas as pd
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -145,9 +146,27 @@ def transform_column(col_name):
 import logging
 import pandas as pd
 from pyspark.sql import DataFrame, SparkSession
-from pyspark.sql.types import StructType
+from pyspark.sql.types import StructType, IntegerType, StringType, FloatType, BooleanType, DateType, TimestampType
 
-def extract_activity_list_data_v2(spark: SparkSession, csv_path: str, expected_schema: StructType) -> DataFrame:
+def convert_types(pd_df: pd.DataFrame, spark_schema: StructType) -> pd.DataFrame:
+    """Convert the pandas DataFrame types based on the provided spark schema."""
+    for field in spark_schema.fields:
+        field_name = field.name
+        if field_name in pd_df.columns:
+            # Map Spark data types to pandas data types
+            if isinstance(field.dataType, IntegerType):
+                pd_df[field_name] = pd_df[field_name].astype('int32')
+            elif isinstance(field.dataType, FloatType):
+                pd_df[field_name] = pd_df[field_name].astype('float')
+            elif isinstance(field.dataType, StringType):
+                pd_df[field_name] = pd_df[field_name].astype('str')
+            elif isinstance(field.dataType, BooleanType):
+                pd_df[field_name] = pd_df[field_name].astype('bool')
+            elif isinstance(field.dataType, DateType) or isinstance(field.dataType, TimestampType):
+                pd_df[field_name] = pd.to_datetime(pd_df[field_name])
+    return pd_df
+
+def extract_activity_list_data(spark: SparkSession, csv_path: str, expected_schema: StructType) -> DataFrame:
     logging.info(f"Extracting activity list data from: {csv_path}")
     
     if not expected_schema:
@@ -159,23 +178,24 @@ def extract_activity_list_data_v2(spark: SparkSession, csv_path: str, expected_s
         # Read the data using pandas
         pd_df = pd.read_csv(csv_path)
         
-        # Convert the pandas DataFrame to a Spark DataFrame using the expected schema
+        # Convert pandas DataFrame columns to the expected types
+        pd_df = convert_types(pd_df, expected_schema)
+        
+        # Convert the pandas DataFrame to a Spark DataFrame
         df = spark.createDataFrame(pd_df, schema=expected_schema)
         
-        # Schema verification
+        # Schema verification (Optional here as it's already enforced)
         if df.schema != expected_schema:
             error_msg = "Schema mismatch between expected and actual data."
             logging.error(error_msg)
             raise ValueError(error_msg)
-        
-        # As pandas DataFrame is no longer needed, we ensure it's not used hereafter
-        del pd_df
         
         return df
 
     except Exception as e:
         logging.error(f"Failed to extract data from CSV at {csv_path}: {e}")
         raise
+
 
 
 def extract_activity_list_data(spark, nas_path: str, expected_schema: StructType) -> DataFrame:
