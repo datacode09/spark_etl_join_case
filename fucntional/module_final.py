@@ -111,7 +111,13 @@ def extract_incoming_vol_data(spark: SparkSession, source, expected_schema: Stru
 #     )
 #     return df
 
-def incoming_vol_join_key_logic(df: DataFrame) -> DataFrame:
+# Define the transform_column function to handle nulls and replace 'N/A' with 'NA'
+def transform_column(col_name):
+    # Coalesce to handle nulls, then replace 'N/A' with 'NA', and remove non-word characters
+    return trim(upper(regexp_replace(regexp_replace(coalesce(col(col_name), lit("")), "N/A", "NA"), "\\W", "")))
+
+# Define the main transformation function
+def incoming_vol_join_key_logic(df):
     logging.info("Applying incoming volume join key logic.")
     df = df.withColumn(
         "JoinKey",
@@ -133,15 +139,10 @@ def incoming_vol_join_key_logic(df: DataFrame) -> DataFrame:
                       transform_column("subprocess_3"),
                       transform_column("subprocess_4"),
                       transform_column("subprocess_5"),
-                      transform_column("subprocess_6"),
-                      lit("|"))
+                      transform_column("subprocess_6"))
         )
     )
     return df
-
-
-def transform_column(col_name):
-    return trim(upper(regexp_replace(col(col_name), "\\W", "")))
 
 import logging
 import pandas as pd
