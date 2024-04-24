@@ -227,6 +227,32 @@ def extract_emp_hierarchy_data(spark) -> DataFrame:
     except Exception as e:
         logging.error("Failed to extract data from Hive table {}: {}".format(hive_table, e))
         raise
+import time
+import logging
+from pyspark.sql import DataFrame
+from pyspark.sql import SparkSession
+
+def extract_emp_hierarchy_data(spark: SparkSession) -> DataFrame:
+    logging.info("Extracting employee hierarchy data.")
+    hive_table = "prod_rie0_atom.enterprisehierarchy"
+    retries = 5  # Number of retries
+    delay = 120  # Delay in seconds (2 minutes)
+
+    for attempt in range(retries):
+        try:
+            return spark.sql(f"SELECT employeeid, employeename, MAX(snap_date) AS latest_snap_date FROM {hive_table} GROUP BY employeeid, employeename")
+        except Exception as e:
+            logging.error("Attempt {} failed to extract data from Hive table {}: {}".format(attempt + 1, hive_table, e))
+            if attempt < retries - 1:
+                logging.info(f"Retrying after {delay // 60} minutes...")
+                time.sleep(delay)
+            else:
+                logging.error("All retries failed. Raising the last exception.")
+                raise
+
+# Example usage with a SparkSession instance
+# spark = SparkSession.builder.appName("HierarchyDataExtraction").getOrCreate()
+# df = extract_emp_hierarchy_data(spark)
 
 def enrich_primary_with_activity_data(primary_df_with_join_key: DataFrame, activity_list_df: DataFrame) -> DataFrame:
     logging.info("Enriching primary DataFrame with activity list data.")
