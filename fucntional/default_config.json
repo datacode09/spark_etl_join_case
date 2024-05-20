@@ -1,0 +1,29 @@
+{
+    "default": {
+        "activity_list_data_source": "/path/to/default/activity/data",
+        "activity_data_output_path": "/path/to/output/default/activity_data",
+        "employee_hierarchy_output_path": "/path/to/output/default/employee_hierarchy",
+        "output_path": "/path/to/final/default/output",
+        "include_activity_data_enrichment": true,
+        "include_employee_hierarchy_enrichment": true,
+        "employee_info_json_column": "details_json"
+    },
+    "sourceA": {
+        "activity_list_data_source": "/path/to/sourceA/activity/data",
+        "activity_data_output_path": "/path/to/output/sourceA/activity_data",
+        "employee_hierarchy_output_path": "/path/to/output/sourceA/employee_hierarchy",
+        "output_path": "/path/to/final/sourceA/output",
+        "include_activity_data_enrichment": true,
+        "include_employee_hierarchy_enrichment": false,
+        "employee_info_json_column": "details_json"
+    },
+    "sourceB": {
+        "activity_list_data_source": "/path/to/sourceB/activity/data",
+        "activity_data_output_path": "/path/to/output/sourceB/activity_data",
+        "employee_hierarchy_output_path": "/path/to/output/sourceB/employee_hierarchy",
+        "output_path": "/path/to/final/sourceB/output",
+        "include_activity_data_enrichment": false,
+        "include_employee_hierarchy_enrichment": true,
+        "employee_info_json_column": "details_json"
+    }
+}
